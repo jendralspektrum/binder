@@ -1,90 +1,1006 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Document Library</title>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Brankas Pusaka</title>
 
-  <!-- DataTables CSS -->
-  <link rel="stylesheet" 
-        href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+    <!-- DataTables CSS -->
+    <link rel="stylesheet"
+          href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
 
-  <!-- Optional: make it cleaner & centered -->
-  <style>
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      margin: 20px;
-      background: #f7f7f7;
-    }
-    .wrapper {
-      max-width: 1200px;
-      margin: 0 auto;
-      background: #ffffff;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.06);
-    }
-    h1 {
-      font-size: 1.5rem;
-      margin-bottom: 1rem;
-    }
-    table.dataTable thead th {
-      background: #fafafa;
-    }
-  </style>
-</head>
-<body>
-<div class="wrapper">
-  <h1>Document Library</h1>
-  <table id="library" class="display" style="width:100%">
-    <thead>
-      <!-- This will be filled dynamically from CSV header -->
-    </thead>
-    <tbody>
-      <!-- Rows will be injected here -->
-    </tbody>
-  </table>
-</div>
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 
-<!-- jQuery -->
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <!-- DataTables JS -->
+    <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 
-<!-- DataTables JS -->
-<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+    <!-- PapaParse -->
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
-<!-- PapaParse for CSV parsing -->
-<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <style>
 
-<script>
-  // 🔴 REPLACE THIS with your Google Sheets published CSV URL
-  const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQuDr22lKdloQ7VZEe6mtitlW0gHHGRNeyruC6eiqcINEWrQ8gzHfkLV3eCzzzN-s7b6CdzcRotEIfn/pub?output=csv";
+      .bp-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 10px;
+        font-size: 2.2rem; /* controls overall scale of title+logo */
+      }
 
-  Papa.parse(CSV_URL, {
-    download: true,
-    header: true,
-    complete: function(results) {
-      const data = results.data.filter(row => Object.keys(row).some(k => row[k] !== ""));
-      if (!data.length) return;
+      .bp-logo {
+        height: 1.25em;      /* match text height */
+        width: auto;
+        object-fit: contain;
+      }
+      body {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        padding: 16px;
+        background: #f5f5f5;
+      }
 
-      const columns = Object.keys(data[0]);
+      h2 {
+        margin-bottom: 10px;
+        font-weight: 600;
+        font-size: 3.0rem;
+        line-height: 1.0;
+        letter-spacing: 0.01em;
+      }
 
-      // Build table header
-      const thead = $("#library thead");
-      const headerRow = $("<tr></tr>");
-      columns.forEach(col => {
-        headerRow.append($("<th></th>").text(col));
+      .filters-bar {
+        display: flex;
+        justify-content: flex-start;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 16px;
+      }
+
+      .dataset-selector-card {
+        min-width: 230px;
+        padding: 18px 18px 16px;
+        background: #ffffff;
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(15,23,42,0.06);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .dataset-selector-card label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #374151;
+      }
+
+      .dataset-selector-card select {
+        padding: 6px 8px;
+        border-radius: 8px;
+        border: 1px solid #d1d5db;
+        font-size: 0.85rem;
+        background: #f9fafb;
+      }
+
+      .column-filters {
+        flex: 1;
+        padding: 18px 18px 16px;
+        background: #ffffff;
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(15,23,42,0.06);
+        display: grid;
+        grid-template-columns: repeat(5, minmax(150px, 1fr));
+        grid-template-areas:
+          "filter-nama-laporan filter-penerbit filter-tanggal-terbit filter-deskripsi filter-clear"
+          "filter-label filter-label filter-label filter-label .";
+        column-gap: 16px;
+        row-gap: 10px;
+        align-items: flex-end;
+      }
+
+      @media (max-width: 960px) {
+        .column-filters {
+          grid-template-columns: 1fr 1fr;
+          grid-template-areas:
+            "filter-nama-laporan filter-nama-laporan"
+            "filter-label filter-label"
+            "filter-penerbit filter-tanggal-terbit"
+            "filter-deskripsi filter-deskripsi";
+        }
+      }
+
+      .filter-wrapper {
+        display: flex;
+        flex-direction: column;
+        font-size: 0.75rem;
+      }
+
+      /* Map each filter to a grid area for nicer layout */
+      .filter-nama-laporan { grid-area: filter-nama-laporan; }
+      .filter-penerbit { grid-area: filter-penerbit; }
+      .filter-tanggal-terbit { grid-area: filter-tanggal-terbit; }
+      .filter-deskripsi { grid-area: filter-deskripsi; }
+
+      .filter-clear { grid-area: filter-clear; align-self: end; justify-self: end; }
+
+      .filter-label { grid-area: filter-label; }
+
+      
+      
+      /* Keep Nama Laporan & Label visually same width and avoid over-long controls */
+      .filter-nama-laporan,
+      .filter-label {
+        justify-self: start;
+      }
+
+      .filter-nama-laporan input,
+      .filter-label select {
+        max-width: 260px;
+        width: 100%;
+      }
+
+      /* Multi-select dropdown: reduce unused whitespace */
+      .filter-label .ms-parent {
+        max-width: 260px;
+      }
+
+      .filter-label .ms-drop {
+        min-width: 260px;
+      }
+
+      .filter-label .ms-drop ul > li label {
+        padding: 4px 8px;
+      }
+
+      /* Tighten vertical spacing in Label multi-select dropdown */
+      .filter-label .ms-drop ul > li {
+        padding: 0;
+        margin: 0;
+      }
+
+      .filter-label .ms-drop ul > li label {
+        padding: 2px 6px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        line-height: 1.2;
+      }
+
+      .filter-label .ms-drop ul > li label input[type="checkbox"] {
+        margin-right: 4px;
+      }
+
+      .dataTables_wrapper {
+        margin-top: 8px;
+        background: #ffffff;
+        border-radius: 16px;
+        padding: 16px 18px 20px;
+        box-shadow: 0 12px 32px rgba(15, 23, 42, 0.04);
+      }
+
+      table.dataTable thead th {
+        background: #f9fafb;
+        border-bottom: 1px solid #e5e7eb;
+        font-weight: 600;
+        font-size: 0.82rem;
+        padding: 10px 10px;
+        color: #374151;
+      }
+
+      table.dataTable tbody td {
+        border-bottom: 1px solid #f1f5f9;
+        padding: 8px 10px;
+        font-size: 0.8rem;
+        color: #111827;
+      }
+
+      table.dataTable tbody tr:hover {
+        background-color: #f9fafb;
+      }
+
+      .dataTables_length,
+      .dataTables_filter {
+        font-size: 0.78rem;
+        color: #6b7280;
+      }
+
+      .dataTables_length select {
+        border-radius: 999px;
+        padding: 3px 8px;
+      }
+
+      .dataTables_filter input {
+        border-radius: 999px;
+        border: 1px solid #d1d5db;
+        padding: 4px 10px;
+        font-size: 0.78rem;
+      }
+.filter-wrapper label {
+        margin-bottom: 2px;
+        color: #555;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .filter-wrapper input,
+      .filter-wrapper select {
+        padding: 4px 8px;
+        font-size: 0.8rem;
+        border-radius: 6px;
+        border: 1px solid #d0d0d0;
+        min-width: 130px;
+        max-width: 220px;
+        background: #fafafa;
+      }
+
+      .filter-wrapper select[multiple] {
+        min-height: 70px;
+      }
+
+      #clear-filters {
+        padding: 6px 14px;
+        border-radius: 999px;
+        border: none;
+        background: #111827;
+        color: #f9fafb;
+        font-size: 0.78rem;
+        cursor: pointer;
+        white-space: nowrap;
+        box-shadow: 0 8px 18px rgba(15, 23, 42, 0.18);
+        transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+      }
+
+      #clear-filters:hover {
+        background: #1f2937;
+        transform: translateY(-1px);
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.22);
+      }
+
+      #clear-filters:active {
+        transform: translateY(0);
+        box-shadow: 0 6px 14px rgba(15, 23, 42, 0.18);
+      }
+
+      #clear-filters:hover {
+        background: #d0d0d0;
+      }
+
+      #library {
+        width: 100%;
+        background: #fff;
+      }
+
+      #library thead th {
+        white-space: nowrap;
+        text-align: center;
+      }
+
+      #library tbody td {
+        max-width: 260px;
+        vertical-align: middle;
+        cursor: pointer;
+        padding-top: 6px;
+        padding-bottom: 6px;
+      }
+
+      #library tbody td.link-center {
+        text-align: center;
+      }
+
+      .cell-content {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        line-height: 1.3rem;
+        max-height: calc(1.3rem * 2); /* 2 lines */
+      }
+
+      .floating-modal {
+        position: absolute;
+        z-index: 9999;
+        background: #fff;
+        padding: 16px 18px;
+        border-radius: 8px;
+        box-shadow: 0 6px 24px rgba(0,0,0,0.22);
+        max-width: 320px;
+        min-width: 220px;
+        display: none;
+      }
+
+      .floating-modal-header {
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+
+      .floating-modal-close {
+        position: absolute;
+        top: 6px;
+        right: 10px;
+        font-size: 18px;
+        cursor: pointer;
+        color: #666;
+      }
+
+      .floating-modal-body {
+        white-space: pre-wrap;
+        word-break: break-word;
+        margin-top: 4px;
+      }
+
+      /* Label multi-select UI */
+      .label-multiselect {
+        position: relative;
+        min-width: 180px;
+      }
+
+      .label-multiselect-button {
+        width: 100%;
+        padding: 4px 8px;
+        font-size: 0.8rem;
+        border-radius: 6px;
+        border: 1px solid #d0d0d0;
+        background: #fafafa;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .label-multiselect-button:after {
+        content: '▾';
+        float: right;
+        font-size: 0.7rem;
+        color: #666;
+      }
+
+      .label-multiselect-dropdown {
+        position: absolute;
+        top: 105%;
+        left: 0;
+        background: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.16);
+        padding: 6px 0;
+        max-height: 240px;
+        overflow-y: auto;
+        min-width: 220px;
+        z-index: 9000;
+        display: none;
+      }
+
+      .label-multiselect-option {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        font-size: 0.8rem;
+      }
+
+      .label-multiselect-option:hover {
+        background: #f2f2f2;
+      }
+
+      .label-multiselect-selected {
+        margin-top: 4px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+
+      .label-chip {
+        background: #e3f2fd;
+        border-radius: 999px;
+        padding: 2px 8px;
+        font-size: 0.7rem;
+      }
+    
+      /* --- Global typography & colour tweaks for cleaner, elegant look --- */
+      :root {
+        --accent: #0f172a;
+        --accent-soft: #e5edff;
+        --accent-chip: #e0f2fe;
+      }
+
+      body {
+        font-size: 15px;
+        color: #111827;
+        background: radial-gradient(circle at top, #f9fafb 0, #e5e7eb 55%, #e5e7eb 100%);
+      }
+
+      h2 {
+        font-size: 1.4rem;
+        letter-spacing: 0.03em;
+        color: var(--accent);
+      }
+
+      .filter-wrapper label {
+        font-size: 0.82rem;
+        color: #4b5563;
+      }
+
+      .filter-wrapper input,
+      .filter-wrapper select {
+        font-size: 0.9rem;
+        background: #f9fafb;
+        border-color: #d1d5db;
+      }
+
+      #clear-filters {
+        background: var(--accent);
+      }
+
+      #clear-filters:hover {
+        background: #1f2937;
+      }
+
+      .label-chip {
+        background: var(--accent-chip);
+        color: #0f172a;
+        font-size: 0.78rem;
+      }
+
+      table.dataTable thead th {
+        font-size: 0.9rem;
+        background: #f3f4f6;
+        color: #4b5563;
+      }
+
+      table.dataTable tbody td {
+        font-size: 0.86rem;
+      }
+
+      .dataTables_length,
+      .dataTables_filter {
+        font-size: 0.85rem;
+      }
+
+      .dataTables_filter input {
+        font-size: 0.85rem;
+      }
+
+      /* Label dropdown typography */
+      .filter-label .ms-drop ul > li label {
+        font-size: 0.86rem;
+      }
+
+      .bp-header h2 {
+        margin-bottom: 10px;
+        font-weight: 600;
+        font-size: 1em;   /* same visual height as logo (1em) */
+        line-height: 1.0;
+        letter-spacing: 0.01em;
+      }
+
+    </style>
+  </head>
+
+  <body>
+    <div class="bp-header">
+      <img class="bp-logo" src="data:image/png;base64,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" alt="Brankas Pusaka logo">
+      <h2>Brankas Pusaka</h2>
+    </div>
+
+    <div class="filters-bar">
+      <div id="column-filters" class="column-filters">
+        <button id="clear-filters" class="filter-clear">Clear filters</button>
+      </div>
+      <div class="dataset-selector-card">
+        <label for="dataset-selector">Koleksi data</label>
+        <select id="dataset-selector">
+          <option value="set1">Memuat…</option>
+        </select>
+      </div>
+    </div>
+
+    <table id="library" class="display">
+      <thead></thead>
+      <tbody></tbody>
+    </table>
+
+    <div id="floatingModal" class="floating-modal">
+      <span class="floating-modal-close">&times;</span>
+      <div class="floating-modal-header" id="fm-header"></div>
+      <div class="floating-modal-body" id="fm-body"></div>
+    </div>
+
+    <script>
+      const DATASETS = [
+        {
+          id: 'set1',
+          name: 'Brankas Pusaka – Dataset 1',
+          url: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQuDr22lKdloQ7VZEe6mtitlW0gHHGRNeyruC6eiqcINEWrQ8gzHfkLV3eCzzzN-s7b6CdzcRotEIfn/pub?output=csv'
+        },
+        {
+          id: 'set2',
+          name: 'Brankas Pusaka – Dataset 2',
+          url: 'https://docs.google.com/spreadsheets/d/e/YOUR_SECOND_SHEET_ID/pub?output=csv'
+        },
+        {
+          id: 'set3',
+          name: 'Brankas Pusaka – Dataset 3',
+          url: 'https://docs.google.com/spreadsheets/d/e/YOUR_THIRD_SHEET_ID/pub?output=csv'
+        }
+      ];
+
+      let currentCsvUrl = DATASETS[0].url;
+      let headerRowGlobal = [];
+
+const COLUMN_FILTER_TYPES = {
+        'No.': 'none',
+        'Nama Laporan': 'text',
+        'Penerbit': 'select',
+        'Tanggal Terbit': 'year-select',
+        'Deskripsi': 'text',
+        'Label': 'multiselect',
+        'Tautan Resmi': 'none',
+        'Tautan Internal': 'none',
+        'Berkas': 'text'
+      };
+
+      function regexEscape(text) {
+        return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      }
+
+      function escapeHtml(text) {
+        if (text === null || text === undefined) return '';
+        return String(text)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      }
+
+      
+      function loadCsv(url) {
+        headerRowGlobal = [];
+
+        const tableEl = document.getElementById('library');
+        if (tableEl) {
+          const thead = tableEl.querySelector('thead');
+          const tbody = tableEl.querySelector('tbody');
+          if (thead) thead.innerHTML = '';
+          if (tbody) tbody.innerHTML = '';
+        }
+
+        const filtersContainer = document.getElementById('column-filters');
+        if (filtersContainer) {
+          const children = Array.from(filtersContainer.children);
+          children.forEach(child => {
+            if (!(child.tagName === 'BUTTON' && child.id === 'clear-filters')) {
+              filtersContainer.removeChild(child);
+            }
+          });
+        }
+
+        if (window.jQuery && $.fn.DataTable && $.fn.DataTable.isDataTable('#library')) {
+          $('#library').DataTable().destroy();
+        }
+
+      Papa.parse(url, {
+        download: true,
+        skipEmptyLines: true,
+        complete: function (results) {
+          const data = results.data;
+          if (!data || !data.length) return;
+
+          const headerRow = data[0];
+          const rows = data.slice(1);
+
+          const noColIndex = headerRow.findIndex(h => h && h.toLowerCase() === 'no.');
+
+          const nonEmptyRows = rows.filter(row =>
+            row.some((cell, idx) => {
+              if (idx === noColIndex) return false;
+              return cell !== null && cell !== undefined && String(cell).trim() !== '';
+            })
+          );
+
+          headerRowGlobal = headerRow;
+
+          const thead = document.querySelector('#library thead');
+          const tr = document.createElement('tr');
+          headerRow.forEach(h => {
+            const th = document.createElement('th');
+            th.textContent = h;
+            tr.appendChild(th);
+          });
+          thead.appendChild(tr);
+
+          const tautanResmiIndex = headerRow.findIndex(h => h && h.toLowerCase() === 'tautan resmi');
+          const tautanInternalIndex = headerRow.findIndex(h => h && h.toLowerCase() === 'tautan internal');
+          const berkasColIndex = headerRow.findIndex(h => h && h.toLowerCase() === 'berkas');
+
+          const processedRows = nonEmptyRows.map(row =>
+            row.map((cell, idx) => {
+              const raw = cell === undefined ? '' : cell;
+              const inner = escapeHtml(raw);
+
+              if ((idx === tautanResmiIndex || idx === tautanInternalIndex) &&
+                  typeof raw === 'string' && raw.startsWith('http')) {
+                return '<a href="' + escapeHtml(raw) + '" target="_blank" rel="noopener">Open</a>';
+              }
+
+              if (idx === berkasColIndex) {
+                return inner;
+              }
+
+              return '<div class="cell-content">' + inner + '</div>';
+            })
+          );
+
+          const columns = headerRow.map((h, idx) => ({ title: h, data: idx }));
+
+          const columnDefs = [];
+          const linkCenters = [];
+          if (tautanResmiIndex >= 0) linkCenters.push(tautanResmiIndex);
+          if (tautanInternalIndex >= 0) linkCenters.push(tautanInternalIndex);
+
+          if (linkCenters.length) {
+            columnDefs.push({
+              targets: linkCenters,
+              createdCell: function (td) {
+                td.classList.add('link-center');
+              }
+            });
+          }
+
+          const table = $('#library').DataTable({
+            data: processedRows,
+            columns: columns,
+            pageLength: 25,
+            lengthMenu: [10, 25, 50, 100],
+            order: [],
+            autoWidth: false,
+            responsive: true,
+            columnDefs: columnDefs
+          });
+
+          const filtersContainer = document.getElementById('column-filters');
+
+          headerRow.forEach((name, colIdx) => {
+            const type = COLUMN_FILTER_TYPES[name] || 'text';
+            if (type === 'none') return;
+
+            const wrapper = document.createElement('div');
+            const slug = 'filter-' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+            wrapper.className = 'filter-wrapper ' + slug;
+
+            const label = document.createElement('label');
+            const labelText = (name === 'Tanggal Terbit') ? 'Tahun Terbit' : name;
+            label.textContent = labelText;
+
+            const rawValues = nonEmptyRows
+              .map(r => r[colIdx])
+              .filter(v => v !== null && v !== undefined && String(v).trim() !== '')
+              .map(v => String(v).trim());
+
+            if (type === 'text') {
+              const input = document.createElement('input');
+              input.type = 'text';
+              input.placeholder = 'Filter';
+              input.dataset.colIndex = colIdx;
+
+              input.addEventListener('input', function () {
+                const idx = parseInt(this.dataset.colIndex, 10);
+                table.column(idx).search(this.value, false, true).draw();
+              });
+
+              wrapper.appendChild(label);
+              wrapper.appendChild(input);
+            } else if (type === 'select') {
+              const select = document.createElement('select');
+              select.dataset.colIndex = colIdx;
+
+              const uniqueValues = Array.from(new Set(rawValues)).sort((a, b) =>
+                a.localeCompare(b)
+              );
+
+              const optAll = document.createElement('option');
+              optAll.value = '';
+              optAll.textContent = 'All';
+              select.appendChild(optAll);
+
+              uniqueValues.forEach(val => {
+                const opt = document.createElement('option');
+                opt.value = val;
+                opt.textContent = val;
+                select.appendChild(opt);
+              });
+
+              select.addEventListener('change', function () {
+                const idx = parseInt(this.dataset.colIndex, 10);
+                const val = this.value;
+                if (val === '') {
+                  table.column(idx).search('', false, true).draw();
+                } else {
+                  const tokens = val.trim().split(/\s+/).map(regexEscape);
+                  const pattern = tokens.join('\\s+');
+                  table.column(idx).search(pattern, true, false).draw();
+                }
+              });
+
+              wrapper.appendChild(label);
+              wrapper.appendChild(select);
+            } else if (type === 'year-select') {
+              const yearsSet = new Set();
+              rawValues.forEach(v => {
+                const m = String(v).match(/\b(19|20)\d{2}\b/);
+                if (m) yearsSet.add(m[0]);
+              });
+
+              const years = Array.from(yearsSet).sort();
+
+              const select = document.createElement('select');
+              select.dataset.colIndex = colIdx;
+
+              const optAll = document.createElement('option');
+              optAll.value = '';
+              optAll.textContent = 'All years';
+              select.appendChild(optAll);
+
+              years.forEach(y => {
+                const opt = document.createElement('option');
+                opt.value = y;
+                opt.textContent = y;
+                select.appendChild(opt);
+              });
+
+              select.addEventListener('change', function () {
+                const idx = parseInt(this.dataset.colIndex, 10);
+                const year = this.value;
+                if (year === '') {
+                  table.column(idx).search('', false, true).draw();
+                } else {
+                  table.column(idx).search(year, false, true).draw();
+                }
+              });
+
+              wrapper.appendChild(label);
+              wrapper.appendChild(select);
+            } else if (type === 'multiselect') {
+              const tokensSet = new Set();
+              rawValues.forEach(v => {
+                v.split(',').forEach(part => {
+                  const t = part.trim();
+                  if (t) tokensSet.add(t);
+                });
+              });
+
+              const container = document.createElement('div');
+              container.className = 'label-multiselect';
+              container.dataset.colIndex = colIdx;
+
+              const button = document.createElement('button');
+              button.type = 'button';
+              button.className = 'label-multiselect-button';
+              button.textContent = 'Filter labels';
+
+              const dropdown = document.createElement('div');
+              dropdown.className = 'label-multiselect-dropdown';
+
+              const selectAllOpt = document.createElement('div');
+              selectAllOpt.className = 'label-multiselect-option';
+              const selectAllCheckbox = document.createElement('input');
+              selectAllCheckbox.type = 'checkbox';
+              selectAllCheckbox.id = 'label-select-all';
+              const selectAllLabel = document.createElement('span');
+              selectAllLabel.textContent = 'Select All';
+              selectAllOpt.appendChild(selectAllCheckbox);
+              selectAllOpt.appendChild(selectAllLabel);
+              dropdown.appendChild(selectAllOpt);
+
+              const options = [];
+              Array.from(tokensSet)
+                .sort((a, b) => a.localeCompare(b))
+                .forEach(tok => {
+                  const optDiv = document.createElement('div');
+                  optDiv.className = 'label-multiselect-option';
+                  const cb = document.createElement('input');
+                  cb.type = 'checkbox';
+                  cb.value = tok;
+                  const span = document.createElement('span');
+                  span.textContent = tok;
+                  optDiv.appendChild(cb);
+                  optDiv.appendChild(span);
+                  dropdown.appendChild(optDiv);
+                  options.push(cb);
+                });
+
+              const selectedWrap = document.createElement('div');
+              selectedWrap.className = 'label-multiselect-selected';
+
+              function updateFilterFromCheckboxes() {
+                const selected = options
+                  .filter(cb => cb.checked)
+                  .map(cb => cb.value);
+                if (selected.length === 0) {
+                  table.column(colIdx).search('', false, true).draw();
+                } else {
+                  const pattern = selected.map(regexEscape).join('|');
+                  table.column(colIdx).search(pattern, true, false).draw();
+                }
+
+                selectedWrap.innerHTML = '';
+                selected.forEach(val => {
+                  const chip = document.createElement('span');
+                  chip.className = 'label-chip';
+                  chip.textContent = val;
+                  selectedWrap.appendChild(chip);
+                });
+
+                if (selected.length === options.length && options.length > 0) {
+                  selectAllCheckbox.checked = true;
+                  selectAllCheckbox.indeterminate = false;
+                } else if (selected.length === 0) {
+                  selectAllCheckbox.checked = false;
+                  selectAllCheckbox.indeterminate = false;
+                } else {
+                  selectAllCheckbox.checked = false;
+                  selectAllCheckbox.indeterminate = true;
+                }
+              }
+
+              options.forEach(cb => {
+                cb.addEventListener('change', updateFilterFromCheckboxes);
+              });
+
+              selectAllCheckbox.addEventListener('change', function () {
+                const checked = this.checked;
+                options.forEach(cb => {
+                  cb.checked = checked;
+                });
+                updateFilterFromCheckboxes();
+              });
+
+              button.addEventListener('click', function (e) {
+                e.stopPropagation();
+                const isOpen = dropdown.style.display === 'block';
+                dropdown.style.display = isOpen ? 'none' : 'block';
+              });
+
+              document.addEventListener('click', function (e) {
+                if (!container.contains(e.target)) {
+                  dropdown.style.display = 'none';
+                }
+              });
+
+              container.appendChild(button);
+              container.appendChild(dropdown);
+              container.appendChild(selectedWrap);
+
+              wrapper.appendChild(label);
+              wrapper.appendChild(container);
+            }
+
+            filtersContainer.appendChild(wrapper);
+          });
+
+          const clearBtn = document.getElementById('clear-filters');
+          clearBtn.addEventListener('click', function () {
+            const inputs = filtersContainer.querySelectorAll('input, select');
+            inputs.forEach(el => {
+              const colIdx = el.dataset.colIndex;
+              if (el.tagName.toLowerCase() === 'select' && el.multiple) {
+                Array.from(el.options).forEach(o => (o.selected = false));
+              } else if (el.type === 'checkbox') {
+                // skip; label checkboxes cleared separately
+              } else {
+                el.value = '';
+              }
+              if (colIdx !== undefined) {
+                table.column(parseInt(colIdx, 10)).search('', false, true);
+              }
+            });
+
+            const labelContainer = document.querySelector('.label-multiselect');
+            if (labelContainer) {
+              const labelColIdx = parseInt(labelContainer.dataset.colIndex, 10);
+              const checkboxes = labelContainer.querySelectorAll('input[type="checkbox"]');
+              checkboxes.forEach(cb => {
+                cb.checked = false;
+                cb.indeterminate = false;
+              });
+              const chips = labelContainer.querySelector('.label-multiselect-selected');
+              if (chips) chips.innerHTML = '';
+              table.column(labelColIdx).search('', false, true);
+            }
+
+            table.draw();
+          });
+
+          const modal = document.getElementById('floatingModal');
+          const modalHeader = document.getElementById('fm-header');
+          const modalBody = document.getElementById('fm-body');
+          const modalClose = document.querySelector('.floating-modal-close');
+
+          $('#library tbody').on('click', 'td', function (e) {
+            const cell = table.cell(this);
+            const cellIndex = cell.index();
+            const colIdx = cellIndex.column;
+            const headerName = headerRowGlobal[colIdx] || '';
+
+            if (
+              colIdx === tautanResmiIndex ||
+              colIdx === tautanInternalIndex ||
+              colIdx === berkasColIndex
+            ) {
+              return;
+            }
+
+            const innerEl = this.querySelector('.cell-content');
+            if (!innerEl) return;
+
+            const content = innerEl.innerText || innerEl.textContent || '';
+
+            const isTruncated = innerEl.scrollHeight - innerEl.clientHeight > 1;
+            if (!isTruncated) return;
+
+            modalHeader.textContent = headerName;
+            modalBody.textContent = content || '(no content)';
+
+            const rect = this.getBoundingClientRect();
+            const scrollTop =
+              window.scrollY || document.documentElement.scrollTop;
+            const scrollLeft =
+              window.scrollX || document.documentElement.scrollLeft;
+
+            let top = rect.bottom + scrollTop + 4;
+            let left = rect.left + scrollLeft;
+
+            const modalWidth = 320;
+            const viewportWidth = window.innerWidth;
+            if (left + modalWidth + 16 > viewportWidth + scrollLeft) {
+              left = viewportWidth + scrollLeft - modalWidth - 16;
+            }
+
+            modal.style.top = top + 'px';
+            modal.style.left = left + 'px';
+            modal.style.display = 'block';
+
+            // stop this click from bubbling to document click handler
+            e.stopPropagation();
+          });
+
+          modalClose.addEventListener('click', () => {
+            modal.style.display = 'none';
+          });
+
+          document.addEventListener('click', function (e) {
+            if (modal.style.display === 'block' && !modal.contains(e.target)) {
+              modal.style.display = 'none';
+            }
+          });
+
+          document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+              modal.style.display = 'none';
+            }
+          });
+        }
       });
-      thead.append(headerRow);
+      }
+      document.addEventListener('DOMContentLoaded', function () {
+        const selector = document.getElementById('dataset-selector');
+        if (selector) {
+          selector.innerHTML = '';
+          DATASETS.forEach(function (ds, index) {
+            const opt = document.createElement('option');
+            opt.value = ds.id;
+            opt.textContent = ds.name;
+            selector.appendChild(opt);
+          });
 
-      // Init DataTable
-      $('#library').DataTable({
-        data: data,
-        columns: columns.map(col => ({ data: col })),
-        pageLength: 25,
-        lengthMenu: [10, 25, 50, 100],
-        order: [], // no default sort; keep as in sheet
+          selector.addEventListener('change', function () {
+            const selected = DATASETS.find(ds => ds.id === this.value);
+            if (selected) {
+              loadCsv(selected.url);
+            }
+          });
+
+          selector.value = DATASETS[0].id;
+        }
+
+        loadCsv(DATASETS[0].url);
       });
-    }
-  });
-</script>
-</body>
+
+    </script>
+  </body>
 </html>
