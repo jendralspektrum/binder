@@ -2,6 +2,7 @@
 <html>
   <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Brankas Pusaka</title>
 
     <!-- DataTables CSS -->
@@ -49,7 +50,7 @@
       .filters-bar {
         display: flex;
         justify-content: flex-start;
-        align-items: flex-start;
+        align-items: stretch;
         gap: 16px;
         margin-bottom: 16px;
       }
@@ -173,6 +174,8 @@
         border-radius: 16px;
         padding: 16px 18px 20px;
         box-shadow: 0 12px 32px rgba(15, 23, 42, 0.04);
+        overflow-x: auto;
+        max-width: 100%;
       }
 
       table.dataTable thead th {
@@ -468,7 +471,67 @@
         letter-spacing: 0.01em;
       }
 
-    </style>
+    
+      /* Mobile layout tweaks */
+      @media (max-width: 768px) {
+        body {
+          padding: 10px;
+        }
+
+        .bp-header {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 6px;
+          font-size: 1.6rem;
+        }
+
+        .filters-bar {
+          flex-direction: column;
+          align-items: stretch;
+        }
+
+        .column-filters {
+          grid-template-columns: 1fr;
+          grid-template-areas:
+            "filter-nama-laporan"
+            "filter-label"
+            "filter-penerbit"
+            "filter-tanggal-terbit"
+            "filter-deskripsi"
+            "filter-clear";
+        }
+
+        .dataset-selector-card {
+          width: 100%;
+        }
+
+        #library {
+          width: 100%;
+        }
+
+        #library tbody td {
+          max-width: none;
+          white-space: normal;
+        }
+
+        .dataTables_wrapper {
+          padding: 12px;
+        }
+
+        .dataTables_length,
+        .dataTables_filter {
+          float: none;
+          text-align: left;
+        }
+
+        .dataTables_wrapper .dataTables_paginate {
+          float: none;
+          text-align: left;
+          margin-top: 8px;
+        }
+      }
+
+</style>
   </head>
 
   <body>
@@ -504,23 +567,24 @@
       const DATASETS = [
         {
           id: 'set1',
-          name: 'Brankas Pusaka – Dataset 1',
-          url: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQuDr22lKdloQ7VZEe6mtitlW0gHHGRNeyruC6eiqcINEWrQ8gzHfkLV3eCzzzN-s7b6CdzcRotEIfn/pub?output=csv'
+          name: 'Report, Journal',
+          url: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRMPv9aWYnvUuTviFkMaWwe-cThg_X9u7iMXs3Y6xwn1rfVklbER6NcyJUjJYpJd_Tp47daxWlzGLJw/pub?output=csv'
         },
         {
           id: 'set2',
-          name: 'Brankas Pusaka – Dataset 2',
-          url: 'https://docs.google.com/spreadsheets/d/e/YOUR_SECOND_SHEET_ID/pub?output=csv'
+          name: 'Keynote, Factsheet',
+          url: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSPGgznT8W3Jf9vlaOGXianRW3K8x8gjxkWiNG7VAEPttvs6JQSzU49md0kAsoX9-OdQhN0m8rst8an/pub?output=csv'
         },
         {
           id: 'set3',
-          name: 'Brankas Pusaka – Dataset 3',
-          url: 'https://docs.google.com/spreadsheets/d/e/YOUR_THIRD_SHEET_ID/pub?output=csv'
+          name: 'Produk Kebijakan',
+          url: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR2aWG2RzpN2ljgAAB5m_yTDNoNMj_mt1NeEDg0oMk8e1H48x9UvpCPX2h6_LmJY0fBf0ZJMIm4jyjD/pub?output=csv'
         }
       ];
 
       let currentCsvUrl = DATASETS[0].url;
       let headerRowGlobal = [];
+      let currentTable = null;
 
 const COLUMN_FILTER_TYPES = {
         'No.': 'none',
@@ -531,7 +595,13 @@ const COLUMN_FILTER_TYPES = {
         'Label': 'multiselect',
         'Tautan Resmi': 'none',
         'Tautan Internal': 'none',
-        'Berkas': 'text'
+        'Berkas': 'text',
+        // Dataset 2 (Factsheet) columns
+        'Nama': 'text',
+        'Tanggal': 'year-select',
+        'Type': 'select',
+        'PIC': 'select',
+        'Tautan': 'none'
       };
 
       function regexEscape(text) {
@@ -551,6 +621,12 @@ const COLUMN_FILTER_TYPES = {
       
       function loadCsv(url) {
         headerRowGlobal = [];
+
+        if (currentTable) {
+          currentTable.clear();
+          currentTable.destroy();
+          currentTable = null;
+        }
 
         const tableEl = document.getElementById('library');
         if (tableEl) {
@@ -607,24 +683,30 @@ const COLUMN_FILTER_TYPES = {
           const tautanResmiIndex = headerRow.findIndex(h => h && h.toLowerCase() === 'tautan resmi');
           const tautanInternalIndex = headerRow.findIndex(h => h && h.toLowerCase() === 'tautan internal');
           const berkasColIndex = headerRow.findIndex(h => h && h.toLowerCase() === 'berkas');
+          const tautanIndex = headerRow.findIndex(h => h && h.toLowerCase() === 'tautan');
 
-          const processedRows = nonEmptyRows.map(row =>
-            row.map((cell, idx) => {
-              const raw = cell === undefined ? '' : cell;
+          // Ensure every processed row has exactly headerRow.length cells
+          const processedRows = nonEmptyRows.map(row => {
+            const out = [];
+            for (let idx = 0; idx < headerRow.length; idx++) {
+              const raw = row[idx] === undefined ? '' : row[idx];
               const inner = escapeHtml(raw);
 
-              if ((idx === tautanResmiIndex || idx === tautanInternalIndex) &&
+              if ((idx === tautanResmiIndex || idx === tautanInternalIndex || idx === tautanIndex) &&
                   typeof raw === 'string' && raw.startsWith('http')) {
-                return '<a href="' + escapeHtml(raw) + '" target="_blank" rel="noopener">Open</a>';
+                out.push('<a href="' + escapeHtml(raw) + '" target="_blank" rel="noopener">Open</a>');
+                continue;
               }
 
               if (idx === berkasColIndex) {
-                return inner;
+                out.push(inner);
+                continue;
               }
 
-              return '<div class="cell-content">' + inner + '</div>';
-            })
-          );
+              out.push('<div class="cell-content">' + inner + '</div>');
+            }
+            return out;
+          });
 
           const columns = headerRow.map((h, idx) => ({ title: h, data: idx }));
 
@@ -632,6 +714,7 @@ const COLUMN_FILTER_TYPES = {
           const linkCenters = [];
           if (tautanResmiIndex >= 0) linkCenters.push(tautanResmiIndex);
           if (tautanInternalIndex >= 0) linkCenters.push(tautanInternalIndex);
+          if (typeof tautanIndex === 'number' && tautanIndex >= 0) linkCenters.push(tautanIndex);
 
           if (linkCenters.length) {
             columnDefs.push({
@@ -652,6 +735,8 @@ const COLUMN_FILTER_TYPES = {
             responsive: true,
             columnDefs: columnDefs
           });
+
+          currentTable = table;
 
           const filtersContainer = document.getElementById('column-filters');
 
@@ -911,6 +996,7 @@ const COLUMN_FILTER_TYPES = {
           const modalBody = document.getElementById('fm-body');
           const modalClose = document.querySelector('.floating-modal-close');
 
+          $('#library tbody').off('click', 'td');
           $('#library tbody').on('click', 'td', function (e) {
             const cell = table.cell(this);
             const cellIndex = cell.index();
